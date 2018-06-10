@@ -8,6 +8,12 @@ import (
 	"runtime/debug"
 )
 
+const (
+	PackRegister = iota
+	HeartBeat
+	PackData
+)
+
 type Session struct {
 	conn    io.ReadWriteCloser
 	buf     *bufio.Writer
@@ -103,14 +109,14 @@ func (this *Session) HandleRead() {
 }
 
 func (this *Session) HandleWrite(session_id uint, data []interface{}) {
-	ret_data, _ := Pack(session_id, data)
-	//log.Println("send data:", string(ret_data[4:]))
+	ret_data, _ := Pack(session_id, PackData, data)
+	//log.Println("send data:", string(ret_data))
 	this.buf.Write(ret_data)
 	this.buf.Flush()
 }
 
 func (this *Session) HandleWriteTest(session_id uint, data []interface{}) {
-	ret_data, _ := Pack(session_id, data)
+	ret_data, _ := Pack(session_id, PackData, data)
 	//log.Println("send data:", string(ret_data[4:]))
 	this.buf.Write(ret_data[:5])
 	this.buf.Flush()

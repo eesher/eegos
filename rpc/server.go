@@ -23,8 +23,8 @@ type Service struct {
 type Server struct {
 	serviceMap map[string]*Service
 	//sessions   map[string]*Session
-	session *Session
-	closed  bool
+	//session    *Session
+	closed bool
 }
 
 func NewServer() *Server {
@@ -34,8 +34,6 @@ func NewServer() *Server {
 }
 
 func (this *Server) Open(addr string) {
-	log.Println("cluster.Open: ", addr)
-
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", addr)
 	if err != nil {
 		log.Println("cluster.Open: net.ResolveTCPAddr: ", err.Error())
@@ -66,7 +64,8 @@ func (this *Server) Open(addr string) {
 func (this *Server) NewSession(conn net.Conn) {
 	log.Println("new connection")
 	session := CreateSession(conn)
-	this.session = session
+	//this.session = session
+	//this.sessions[conn.RemoteAddr().String()] = session
 	for {
 		select {
 		case data, ok := <-session.newData:
@@ -83,7 +82,7 @@ func (this *Server) NewSession(conn net.Conn) {
 				dot := strings.LastIndex(info, ".")
 				if dot < 0 {
 					log.Println("cannot find dot")
-					return
+					continue
 				}
 				serviceName := info[:dot]
 				methodName := info[dot+1:]
@@ -91,12 +90,12 @@ func (this *Server) NewSession(conn net.Conn) {
 				sInfo := this.serviceMap[serviceName]
 				if sInfo == nil {
 					log.Println("cannot find service")
-					return
+					continue
 				}
 				mInfo := sInfo.methods[methodName]
 				if mInfo == nil {
 					log.Println("cannot find method", methodName, len(methodName))
-					return
+					continue
 				}
 
 				callArgs := make([]reflect.Value, len(mInfo.args)+1)
@@ -113,7 +112,7 @@ func (this *Server) NewSession(conn net.Conn) {
 					*/
 					callArgs[i+1] = reflect.ValueOf(args[i+1]).Convert(mInfo.args[i])
 				}
-				go this.RunFunc(mInfo, callArgs, session_id)
+				go this.RunFunc(mInfo, callArgs, session, session_id)
 			}
 		case <-session.cClose:
 			log.Println("session close")
@@ -122,7 +121,7 @@ func (this *Server) NewSession(conn net.Conn) {
 	}
 }
 
-func (this *Server) RunFunc(m *methodType, args []reflect.Value, session_id uint) {
+func (this *Server) RunFunc(m *methodType, args []reflect.Value, session *Session, session_id uint) {
 	callRet := m.method.Func.Call(args)
 
 	retLen := len(callRet)
@@ -130,7 +129,7 @@ func (this *Server) RunFunc(m *methodType, args []reflect.Value, session_id uint
 	for i := 0; i < retLen; i++ {
 		reply[i] = callRet[i].Interface()
 	}
-	this.session.HandleWrite(session_id, reply)
+	session.HandleWrite(session_id, reply)
 }
 
 func (this *Server) Register(rcvr interface{}) {

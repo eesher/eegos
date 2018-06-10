@@ -61,7 +61,13 @@ func (this *Client) HandleData(session *Session) {
 					waitRet <- data.body
 				}
 			}
+
+		case <-session.cClose:
+			log.Println("session close")
+			break
 		}
+
+		//heartbeat
 	}
 }
 
