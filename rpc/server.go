@@ -121,7 +121,7 @@ func (this *Server) NewSession(conn net.Conn) {
 	}
 }
 
-func (this *Server) RunFunc(m *methodType, args []reflect.Value, session *Session, session_id uint) {
+func (this *Server) RunFunc(m *methodType, args []reflect.Value, session *Session, session_id uint16) {
 	callRet := m.method.Func.Call(args)
 
 	retLen := len(callRet)
