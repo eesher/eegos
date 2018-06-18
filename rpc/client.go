@@ -67,8 +67,10 @@ func (this *Client) Dial(addr string) {
 
 func (this *Client) CloseSession() {
 	this.ticker.Stop()
+	this.session.conn.Close()
 	close(this.cHeartBeat)
-	for _, waitRet := range this.callRet {
+	for session_id, waitRet := range this.callRet {
+		delete(this.callRet, session_id)
 		close(waitRet)
 	}
 }
@@ -84,10 +86,13 @@ func (this *Client) HandleData(session *Session) {
 				if data.data_type == heartBeatRet {
 					this.cHeartBeat <- true
 				} else {
-					waitRet := this.callRet[session_id]
-					if waitRet != nil {
-						waitRet <- data.body
+					waitRet, ok := this.callRet[session_id]
+					if !ok {
+						continue
 					}
+					waitRet <- data.body
+					delete(this.callRet, session_id)
+					close(waitRet)
 				}
 			}
 
@@ -99,22 +104,24 @@ func (this *Client) HandleData(session *Session) {
 	}
 }
 
-func (this *Client) Call(v []interface{}) (ret []interface{}) {
+func (this *Client) Call(v []interface{}) []interface{} {
 	session_id := counter.GetNum()
+	//TODO make a channel list pool
 	waitRet := make(chan []interface{})
 	this.callRet[session_id] = waitRet
-	this.session.HandleWriteTest(session_id, v)
+	this.session.HandleWrite(session_id, v)
 
 	select {
-	case ret = <-waitRet:
-		close(waitRet)
-		delete(this.callRet, session_id)
-		return
+	case ret, ok := <-waitRet:
+		if ok {
+			return ret
+		}
 
 	case <-time.After(3 * time.Second):
 		log.Println("Timed out")
 	}
-	return
+	log.Println("some problems on server")
+	return nil
 }
 
 func (this *Client) Send(v []interface{}) {

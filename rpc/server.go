@@ -70,50 +70,50 @@ func (this *Server) NewSession(conn net.Conn) {
 		select {
 		case data, ok := <-session.newData:
 			if !ok {
-			} else {
-				args := data.body
-				session_id := data.head
-				if len(args) == 0 {
-					continue
-				}
-
-				info := args[0].(string)
-
-				dot := strings.LastIndex(info, ".")
-				if dot < 0 {
-					log.Println("cannot find dot")
-					continue
-				}
-				serviceName := info[:dot]
-				methodName := info[dot+1:]
-
-				sInfo := this.serviceMap[serviceName]
-				if sInfo == nil {
-					log.Println("cannot find service")
-					continue
-				}
-				mInfo := sInfo.methods[methodName]
-				if mInfo == nil {
-					log.Println("cannot find method", methodName, len(methodName))
-					continue
-				}
-
-				callArgs := make([]reflect.Value, len(mInfo.args)+1)
-				callArgs[0] = sInfo.rcvr
-
-				for i := 0; i < len(mInfo.args); i++ {
-					/*
-						if reflect.TypeOf(args[i+1]).Kind() != mInfo.args[i].Kind() {
-							callArgs[i+1] = reflect.ValueOf(args[i+1]).Convert(mInfo.args[i])
-							log.Println("arg type convert")
-						} else {
-							callArgs[i+1] = reflect.ValueOf(args[i+1])
-						}
-					*/
-					callArgs[i+1] = reflect.ValueOf(args[i+1]).Convert(mInfo.args[i])
-				}
-				go this.RunFunc(mInfo, callArgs, session, session_id)
+				continue
 			}
+			args := data.body
+			session_id := data.head
+			if len(args) == 0 {
+				continue
+			}
+
+			info := args[0].(string)
+
+			dot := strings.LastIndex(info, ".")
+			if dot < 0 {
+				log.Println("cannot find dot")
+				continue
+			}
+			serviceName := info[:dot]
+			methodName := info[dot+1:]
+
+			sInfo := this.serviceMap[serviceName]
+			if sInfo == nil {
+				log.Println("cannot find service")
+				continue
+			}
+			mInfo := sInfo.methods[methodName]
+			if mInfo == nil {
+				log.Println("cannot find method", methodName, len(methodName))
+				continue
+			}
+
+			callArgs := make([]reflect.Value, len(mInfo.args)+1)
+			callArgs[0] = sInfo.rcvr
+
+			for i := 0; i < len(mInfo.args); i++ {
+				/*
+					if reflect.TypeOf(args[i+1]).Kind() != mInfo.args[i].Kind() {
+						callArgs[i+1] = reflect.ValueOf(args[i+1]).Convert(mInfo.args[i])
+						log.Println("arg type convert")
+					} else {
+						callArgs[i+1] = reflect.ValueOf(args[i+1])
+					}
+				*/
+				callArgs[i+1] = reflect.ValueOf(args[i+1]).Convert(mInfo.args[i])
+			}
+			go this.RunFunc(mInfo, callArgs, session, session_id)
 		case <-session.cClose:
 			log.Println("session close")
 			break

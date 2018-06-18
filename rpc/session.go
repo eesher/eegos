@@ -132,7 +132,6 @@ func (this *Session) HandleRead() {
 	}()
 
 	buff := make([]byte, 128)
-	//TODO make a channel list buff
 	for {
 		if err := this.Reader(buff, 0); err != nil {
 			log.Println(err)
