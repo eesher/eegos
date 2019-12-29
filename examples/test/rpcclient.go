@@ -1,7 +1,8 @@
 package main
 
 import (
-	"../../cluster"
+	"eegos/cluster"
+
 	"log"
 	"time"
 )

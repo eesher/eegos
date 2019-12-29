@@ -1,7 +1,8 @@
 package cluster
 
 import (
-	"../rpc"
+	"eegos/rpc"
+
 	"strings"
 )
 

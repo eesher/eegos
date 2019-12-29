@@ -128,3 +128,6 @@ func (this *Client) Send(v []interface{}) {
 	session_id := counter.GetNum()
 	this.session.HandleWrite(session_id, v)
 }
+
+func (this *Client) SendCallBack(v []interface{}, callBack func(callRet interface{})) {
+}
