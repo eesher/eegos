@@ -105,8 +105,8 @@ func (this *Server) Message(fd uint16, sessionID uint16, body []byte) {
 	outc <- retPkg
 }
 
-func (this *Server) HeartBeat(fd uint16, sessionID uint16) {
-	log.Debug("HeartBeat", fd, sessionID)
+func (this *Server) Heartbeat(fd uint16, sessionID uint16) {
+	log.Debug("Heartbeat", fd, sessionID)
 }
 
 func (this *Server) Close(fd uint16) {

@@ -24,7 +24,6 @@ func Register(rcvr interface{}) {
 	cServer.server.Register(rcvr)
 }
 
-/*
 var cClient map[string]*rpc.Client
 
 func Connect(serverName string, addr string) {
@@ -53,4 +52,3 @@ func Send(serverName string, v ...interface{}) {
 	}
 	client.Send(v)
 }
-*/

@@ -6,7 +6,7 @@ import (
 
 	"bufio"
 	"io"
-	"net"
+	//	"net"
 	"runtime/debug"
 )
 
@@ -22,7 +22,7 @@ type Session struct {
 	state   int
 }
 
-func CreateSession(conn *net.TCPConn) *Session {
+func CreateSession(conn io.ReadWriteCloser) *Session {
 	session := new(Session)
 	session.fd = sessionCounter.GetNum()
 	session.conn = conn

@@ -2,8 +2,8 @@ package main
 
 import (
 	"eegos/cluster"
+	"eegos/log"
 
-	"log"
 	"time"
 )
 
@@ -13,12 +13,12 @@ func main() {
 	for {
 		time.Sleep(2 * time.Second)
 		cluster.Send("test", "Test.PrintAB")
-		log.Println("send:1: Test.PrintAB done")
+		log.Debug("send:1: Test.PrintAB done")
 
 		ret := cluster.Call("test", "Test.TestArgs", 10)
-		log.Println("call:2: ret", ret[0])
+		log.Debug("call:2: ret", ret[0])
 
 		ret = cluster.Call("test", "Test.TestString", "aaaa")
-		log.Println("call:3: ret", ret[0])
+		log.Debug("call:3: ret", ret[0])
 	}
 }
