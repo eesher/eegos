@@ -14,14 +14,18 @@ type ServerInfo struct {
 var cServer *ServerInfo
 
 func Open(addr string) {
-	server := rpc.NewServer()
-	server.Open(addr)
+	server := rpc.NewServer(addr)
+	//server.Open(addr)
 	indx := strings.LastIndex(addr, ":")
 	cServer = &ServerInfo{server: server, port: addr[indx+1:]}
 }
 
 func Register(rcvr interface{}) {
 	cServer.server.Register(rcvr)
+}
+
+func Start() {
+	cServer.server.Start()
 }
 
 var cClient map[string]*rpc.Client

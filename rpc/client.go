@@ -5,18 +5,21 @@ import (
 	"eegos/log"
 
 	"encoding/json"
+	"sync"
 	"time"
 )
 
 type Client struct {
 	callRet   map[uint16](chan []interface{})
+	mapLocker *sync.RWMutex
 	tcpClient *gate.TcpClient
-	outData   chan *gate.Data
+	session   *gate.Session
 }
 
 func NewClient() *Client {
 	newClient := &Client{}
 	newClient.callRet = make(map[uint16](chan []interface{}))
+	newClient.mapLocker = &sync.RWMutex{}
 	newClient.tcpClient = gate.NewTcpClient(newClient)
 	return newClient
 }
@@ -25,12 +28,14 @@ func (this *Client) Dial(addr string) {
 	this.tcpClient.Dial(addr)
 }
 
-func (this *Client) Connect(fd uint16, outData chan *gate.Data) {
-	this.outData = outData
+func (this *Client) Connect(fd uint16, s *gate.Session) {
+	this.session = s
 }
 
 func (this *Client) Message(fd uint16, sessionID uint16, body []byte) {
+	this.mapLocker.RLock()
 	waitRet, ok := this.callRet[sessionID]
+	this.mapLocker.RUnlock()
 	if !ok {
 		return
 	}
@@ -43,7 +48,9 @@ func (this *Client) Message(fd uint16, sessionID uint16, body []byte) {
 	}
 
 	waitRet <- args
+	this.mapLocker.Lock()
 	delete(this.callRet, sessionID)
+	this.mapLocker.Unlock()
 	close(waitRet)
 }
 
@@ -51,14 +58,17 @@ func (this *Client) Heartbeat(uint16, uint16) {
 }
 
 func (this *Client) Close(uint16) {
+	this.mapLocker.Lock()
 	for sessionID, waitRet := range this.callRet {
 		delete(this.callRet, sessionID)
 		close(waitRet)
 	}
+	this.mapLocker.Unlock()
+	//this.tcpClient.Close()
 }
 
 func (this *Client) Call(v []interface{}) []interface{} {
-	sessionID := this.tcpClient.MsgCounter.GetNum()
+	sessionID := this.tcpClient.GetSessionID()
 	//TODO make a channel list pool
 	waitRet := make(chan []interface{})
 
@@ -66,9 +76,15 @@ func (this *Client) Call(v []interface{}) []interface{} {
 	if err != nil {
 		return nil
 	}
-	this.callRet[sessionID] = waitRet
 
-	this.outData <- &gate.Data{Head: sessionID, Body: body}
+	//log.Debug("call", sessionID)
+	this.mapLocker.Lock()
+	this.callRet[sessionID] = waitRet
+	this.mapLocker.Unlock()
+
+	//this.outData <- &gate.Data{Head: sessionID, Body: body}
+	//sessionID := this.tcpClient.WriteData(this.session, body)
+	this.tcpClient.Write(this.session, sessionID, body)
 
 	select {
 	case ret, ok := <-waitRet:
@@ -77,19 +93,21 @@ func (this *Client) Call(v []interface{}) []interface{} {
 		}
 
 	case <-time.After(3 * time.Second):
-		log.Debug("Timed out")
+		log.Debug("Timed out", sessionID)
 	}
 	log.Debug("some problems on server")
 	return nil
 }
 
 func (this *Client) Send(v []interface{}) {
-	sessionID := this.tcpClient.MsgCounter.GetNum()
+	//sessionID := this.tcpClient.GetSessionID()
 	body, err := json.Marshal(v)
 	if err != nil {
 		return
 	}
-	this.outData <- &gate.Data{Head: sessionID, Body: body}
+	//this.outData <- &gate.Data{Head: sessionID, Body: body}
+	this.tcpClient.WriteData(this.session, body)
+	//log.Debug("send", sessionID)
 }
 
 func (this *Client) SendCallBack(v []interface{}, callBack func(callRet interface{})) {

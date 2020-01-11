@@ -23,26 +23,30 @@ type Service struct {
 
 type Server struct {
 	serviceMap map[string]*Service
-	tcpGate    *gate.TcpServer
-	outDatas   map[uint16]chan *gate.Data
+	tcpServer  *gate.TcpServer
+	sessions   map[uint16]*gate.Session
 }
 
-func NewServer() *Server {
+func NewServer(addr string) *Server {
 	services := make(map[string]*Service)
 	newServer := Server{serviceMap: services}
-	newServer.tcpGate = gate.NewTcpServer(&newServer)
-	newServer.outDatas = make(map[uint16]chan *gate.Data)
+	newServer.tcpServer = gate.NewTcpServer(&newServer, addr)
+	newServer.sessions = make(map[uint16]*gate.Session)
 
 	return &newServer
 }
 
-func (this *Server) Connect(fd uint16, outData chan *gate.Data) {
+func (this *Server) Start() {
+	this.tcpServer.Start()
+}
+
+func (this *Server) Connect(fd uint16, session *gate.Session) {
 	log.Debug("rpc server new connection", fd)
-	this.outDatas[fd] = outData
+	this.sessions[fd] = session
 }
 
 func (this *Server) Message(fd uint16, sessionID uint16, body []byte) {
-	outc, ok := this.outDatas[fd]
+	s, ok := this.sessions[fd]
 	if !ok {
 		log.Error("fd not found", fd, sessionID)
 		return
@@ -54,6 +58,7 @@ func (this *Server) Message(fd uint16, sessionID uint16, body []byte) {
 		log.Error(err)
 		return
 	}
+	//log.Debug("get message", sessionID, args[0])
 
 	if len(args) == 0 {
 		log.Error("no args")
@@ -95,14 +100,22 @@ func (this *Server) Message(fd uint16, sessionID uint16, body []byte) {
 		*/
 		callArgs[i+1] = reflect.ValueOf(args[i+1]).Convert(mInfo.args[i])
 	}
+	//log.Debug("run func", sessionID, args[0])
 	ret := this.RunFunc(mInfo, callArgs)
-	retBody, err := json.Marshal(ret)
-	if err != nil {
-		log.Error(err)
-		return
+	if ret != nil {
+		retBody, err := json.Marshal(ret)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		this.tcpServer.Write(s, sessionID, retBody)
+	} else {
+		this.tcpServer.Write(s, sessionID, nil)
 	}
-	retPkg := &gate.Data{Head: sessionID, Body: retBody}
-	outc <- retPkg
+	//retPkg := &gate.Data{Head: sessionID, Body: retBody}
+	//log.Debug("return", sessionID, args[0])
+	//this.tcpGate.Write(s, sessionID, retBody)
+	//outc <- retPkg
 }
 
 func (this *Server) Heartbeat(fd uint16, sessionID uint16) {
@@ -110,17 +123,22 @@ func (this *Server) Heartbeat(fd uint16, sessionID uint16) {
 }
 
 func (this *Server) Close(fd uint16) {
-	log.Debug("rpc server close", fd)
+	log.Debug("need close session", fd)
 }
 
+/*
 func (this *Server) Open(addr string) {
-	this.tcpGate.Open(addr)
+	//this.tcpGate.Open(addr)
 }
+*/
 
 func (this *Server) RunFunc(m *methodType, args []reflect.Value) []interface{} {
 	callRet := m.method.Func.Call(args)
 
 	retLen := len(callRet)
+	if retLen == 0 {
+		return nil
+	}
 	reply := make([]interface{}, retLen)
 	for i := 0; i < retLen; i++ {
 		reply[i] = callRet[i].Interface()

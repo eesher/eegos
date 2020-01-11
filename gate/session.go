@@ -4,33 +4,38 @@ import (
 	"eegos/log"
 	"eegos/util"
 
-	"bufio"
+	//"bufio"
 	"io"
 	//	"net"
 	"runtime/debug"
+	"sync"
 )
+
+var writeLock = &sync.Mutex{}
 
 var sessionCounter = util.Counter{Num: 0}
 
 type Session struct {
-	fd      uint16
-	conn    io.ReadWriteCloser
-	buf     *bufio.Writer
-	inData  chan *Data
-	outData chan *Data
-	cClose  chan bool
-	state   int
+	fd   uint16
+	conn io.ReadWriteCloser
+	//buf     *bufio.Writer
+	inData    chan *Data
+	outData   chan []byte
+	cClose    chan bool
+	state     int
+	msgHandle func(uint16, uint16, []byte)
 }
 
-func CreateSession(conn io.ReadWriteCloser) *Session {
+func CreateSession(conn io.ReadWriteCloser, msgHandle func(uint16, uint16, []byte)) *Session {
 	session := new(Session)
 	session.fd = sessionCounter.GetNum()
 	session.conn = conn
-	session.buf = bufio.NewWriter(conn)
+	//session.buf = bufio.NewWriter(conn)
 	session.inData = make(chan *Data, 1)
-	session.outData = make(chan *Data, 1)
+	session.outData = make(chan []byte, 1)
 	session.cClose = make(chan bool)
 	session.state = NEW_CONNECTION
+	session.msgHandle = msgHandle
 
 	return session
 }
@@ -38,7 +43,7 @@ func CreateSession(conn io.ReadWriteCloser) *Session {
 func (this *Session) Start() {
 	this.state = WORKING
 	go this.handleRead()
-	//go this.handleWrite()
+	go this.handleWrite()
 }
 
 func (this *Session) Close() {
@@ -46,15 +51,20 @@ func (this *Session) Close() {
 }
 
 func (this *Session) Release() {
+	log.Debug("release session")
 	close(this.inData)
 	close(this.outData)
 	close(this.cClose)
 	this.state = CLOSED
 }
 
+func (this *Session) Forward(msgHandle func(uint16, uint16, []byte)) {
+	this.msgHandle = msgHandle
+}
+
 func (this *Session) pack(head uint16, dType uint8, body []byte) (pkg []byte) {
-	length := 5 + len(body)
-	pkg = make([]byte, 0, length)
+	length := len(body)
+	pkg = make([]byte, 0, length+5)
 	pkg = append(pkg, uint8(length), uint8(length>>8), dType, uint8(head), uint8(head>>8))
 	//pkg = append(pkg, uint8(length>>8))
 	//pkg = append(pkg, dType)
@@ -78,10 +88,10 @@ func (this *Session) pack(head uint16, dType uint8, body []byte) (pkg []byte) {
 func (this *Session) unpack(data []byte, length int) (pkgLen int, pkg *Data, err error) {
 	pkgLen = int(data[0]) + int(data[1])<<8
 	if pkgLen <= length {
-		pkg = &Data{Body: make([]byte, 0, pkgLen-5)}
+		pkg = &Data{body: make([]byte, 0, pkgLen-5)}
 		pkg.dType = data[2]
-		pkg.Head = uint16(data[3]) + uint16(data[4])<<8
-		pkg.Body = append(pkg.Body, data[5:pkgLen]...)
+		pkg.head = uint16(data[3]) + uint16(data[4])<<8
+		pkg.body = append(pkg.body, data[5:pkgLen]...)
 		return
 	} else {
 		pkgLen = length
@@ -95,6 +105,7 @@ func (this *Session) Reader(data []byte, idx int) error {
 		if n == 0 {
 			return nil
 		}
+		//log.Debug(idx, n, string(data))
 		n = n + idx
 		startIdx := 0
 		for {
@@ -103,6 +114,7 @@ func (this *Session) Reader(data []byte, idx int) error {
 				this.Reader(data, pLen)
 				break
 			} else {
+				log.Debug(pLen, pkg.dType, pkg.head, string(pkg.body))
 				this.inData <- pkg
 				startIdx = pLen
 				n = n - pLen
@@ -111,6 +123,8 @@ func (this *Session) Reader(data []byte, idx int) error {
 				}
 			}
 		}
+	} else if err == io.EOF {
+		return err
 	} else {
 		log.Error("read error:", err, n)
 		return err
@@ -118,7 +132,27 @@ func (this *Session) Reader(data []byte, idx int) error {
 	return nil
 }
 
+func (this *Session) NewReader() error {
+	var b [5]byte
+	if _, err := io.ReadFull(this.conn, b[:]); err != nil {
+		return err
+	}
+	pkgLen := uint16(b[0]) + uint16(b[1])<<8
+	pkg := &Data{}
+	pkg.dType = b[2]
+	pkg.head = uint16(b[3]) + uint16(b[4])<<8
+	if pkgLen > 0 {
+		pkg.body = make([]byte, pkgLen)
+		if _, err := io.ReadFull(this.conn, pkg.body); err != nil {
+			return err
+		}
+	}
+	this.inData <- pkg
+	return nil
+}
+
 func (this *Session) handleRead() {
+	log.Debug("handleRead start")
 	defer func() {
 		log.Debug("connection close")
 		this.conn.Close()
@@ -128,14 +162,18 @@ func (this *Session) handleRead() {
 		}
 	}()
 
-	buff := make([]byte, 1024)
+	//buff := make([]byte, 1024)
 	for {
 		if this.state != WORKING {
 			break
 		}
 
-		if err := this.Reader(buff, 0); err != nil {
-			log.Error(err)
+		//buff = buff[:cap(buff)]
+		//if err := this.Reader(buff, 0); err != nil {
+		if err := this.NewReader(); err != nil {
+			if err != io.EOF {
+				log.Error(err)
+			}
 			break
 		}
 	}
@@ -151,28 +189,35 @@ func (this *Session) handleRead() {
 			return
 		}
 	*/
+	log.Debug("handleRead stop")
 }
 
 func (this *Session) handleWrite() {
+	log.Debug("handleWrite start")
+	defer log.Debug("handleWrite stop")
 	for {
 		if this.state != WORKING {
 			break
 		}
 
 		select {
-		case data, ok := <-this.outData:
+		case pkg, ok := <-this.outData:
 			if !ok {
-				continue
+				log.Error("pkg channel read error")
+				break
 			}
-			pkg := this.pack(data.Head, data.dType, data.Body)
-			this.buf.Write(pkg)
-			this.buf.Flush()
+			//pLen, data, _ := this.unpack(pkg, 1024)
+			//log.Debug("pkg write:", pLen, data.head)
+			//pkg := this.pack(data.Head, data.dType, data.Body)
+			this.conn.Write(pkg)
+			//this.buf.Write(pkg)
+			//this.buf.Flush()
 		}
 	}
-	log.Debug("handleWrite stopped")
 }
 
-func (this *Session) Write(head uint16, dType uint8, data []byte) {
+//TODO make only one goroutine to write
+func (this *Session) doWrite(head uint16, dType uint8, data []byte) {
 	if this.state != WORKING {
 		log.Error("session not working state=", this.state, "pkg not send", head)
 		return
@@ -182,8 +227,12 @@ func (this *Session) Write(head uint16, dType uint8, data []byte) {
 	}
 
 	pkg := this.pack(head, dType, data)
-	this.buf.Write(pkg)
-	this.buf.Flush()
+	this.outData <- pkg
+	//writeLock.Lock()
+	//this.conn.Write(pkg)
+	//this.buf.Write(pkg)
+	//this.buf.Flush()
+	//writeLock.Unlock()
 }
 
 /*

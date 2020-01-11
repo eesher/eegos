@@ -5,6 +5,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.0.2] - 2020-01-11
+### Added
+- TcpConn as base tcp connection
+### Changed
+- move TcpServer listen to Start()
+- isolate Data in package
+- set TcpClient ticker to time.Timer for reset
+- use local log package
+- session Write in connection
+- move TcpConn counter to TcpClient
+- use session message handle
+### Deprecated
+- old reader in session
+### Removed
+- old rpc
+### Fixed
+- use new reader in session
+- for loop with full gorountine will stuck in reflect.Method.Call
+
 ## [0.0.2] - 2020-01-01
 ### Changed
 - complete rpc example still have bugs

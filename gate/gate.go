@@ -8,13 +8,14 @@ const (
 )
 
 const (
-	HEARTBEAT = iota
+	PKG_TYPE = iota
+	HEARTBEAT
 	HEARTBEAT_RET
 	DATA
 )
 
 type Data struct {
 	dType uint8
-	Head  uint16
-	Body  []byte
+	head  uint16
+	body  []byte
 }

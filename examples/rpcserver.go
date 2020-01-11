@@ -2,7 +2,8 @@ package main
 
 import (
 	"eegos/cluster"
-	"log"
+	"eegos/log"
+	//"time"
 )
 
 type Test struct {
@@ -10,24 +11,28 @@ type Test struct {
 }
 
 func (this *Test) PrintAB() {
-	log.Println("run func PrintAB()", this.a, this.b)
+	log.Debug("run func PrintAB()", this.a, this.b)
 }
 
 func (this *Test) TestArgs(aa int) int {
-	log.Println("run func TestArgs(aa int)", aa)
+	log.Debug("run func TestArgs(aa int)", aa)
 	return aa + this.a + this.b
 }
 
 func (this *Test) TestString(s string) int {
-	log.Println("run func TestString(s string)", s)
+	log.Debug("run func TestString(s string)", s)
 	return this.a + this.b
 }
 
 func main() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	cluster.Open(":1234")
-	log.Println("listen on 1234")
+	log.Debug("listen on 1234")
 	tmp := &Test{1, 2}
 	cluster.Register(tmp)
-	for {
-	}
+	cluster.Start()
+
+	select {}
+	//c := make(chan bool)
+	//<-c
 }
