@@ -1,4 +1,4 @@
-package gate
+package network
 
 const (
 	NEW_CONNECTION = iota

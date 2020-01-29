@@ -1,7 +1,7 @@
 package cluster
 
 import (
-	"eegos/rpc"
+	"github.com/eesher/eegos/rpc"
 
 	"strings"
 )

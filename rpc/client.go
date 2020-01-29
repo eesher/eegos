@@ -1,8 +1,8 @@
 package rpc
 
 import (
-	"eegos/gate"
-	"eegos/log"
+	"github.com/eesher/eegos/log"
+	"github.com/eesher/eegos/network"
 
 	"encoding/json"
 	"sync"
@@ -12,15 +12,15 @@ import (
 type Client struct {
 	callRet   map[uint16](chan []interface{})
 	mapLocker *sync.RWMutex
-	tcpClient *gate.TcpClient
-	session   *gate.Session
+	tcpClient *network.TcpClient
+	session   *network.Session
 }
 
 func NewClient() *Client {
 	newClient := &Client{}
 	newClient.callRet = make(map[uint16](chan []interface{}))
 	newClient.mapLocker = &sync.RWMutex{}
-	newClient.tcpClient = gate.NewTcpClient(newClient)
+	newClient.tcpClient = network.NewTcpClient(newClient)
 	return newClient
 }
 
@@ -28,7 +28,7 @@ func (this *Client) Dial(addr string) {
 	this.tcpClient.Dial(addr)
 }
 
-func (this *Client) Connect(fd uint16, s *gate.Session) {
+func (this *Client) Connect(fd uint16, s *network.Session) {
 	this.session = s
 }
 
@@ -82,7 +82,7 @@ func (this *Client) Call(v []interface{}) []interface{} {
 	this.callRet[sessionID] = waitRet
 	this.mapLocker.Unlock()
 
-	//this.outData <- &gate.Data{Head: sessionID, Body: body}
+	//this.outData <- &network.Data{Head: sessionID, Body: body}
 	//sessionID := this.tcpClient.WriteData(this.session, body)
 	this.tcpClient.Write(this.session, sessionID, body)
 
@@ -105,7 +105,7 @@ func (this *Client) Send(v []interface{}) {
 	if err != nil {
 		return
 	}
-	//this.outData <- &gate.Data{Head: sessionID, Body: body}
+	//this.outData <- &network.Data{Head: sessionID, Body: body}
 	this.tcpClient.WriteData(this.session, body)
 	//log.Debug("send", sessionID)
 }

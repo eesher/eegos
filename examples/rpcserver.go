@@ -1,8 +1,8 @@
 package main
 
 import (
-	"eegos/cluster"
-	"eegos/log"
+	"github.com/eesher/eegos/cluster"
+	"github.com/eesher/eegos/log"
 	//"time"
 )
 

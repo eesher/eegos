@@ -1,8 +1,8 @@
 package rpc
 
 import (
-	"eegos/gate"
-	"eegos/log"
+	"github.com/eesher/eegos/log"
+	"github.com/eesher/eegos/network"
 
 	"encoding/json"
 	"reflect"
@@ -23,15 +23,15 @@ type Service struct {
 
 type Server struct {
 	serviceMap map[string]*Service
-	tcpServer  *gate.TcpServer
-	sessions   map[uint16]*gate.Session
+	tcpServer  *network.TcpServer
+	sessions   map[uint16]*network.Session
 }
 
 func NewServer(addr string) *Server {
 	services := make(map[string]*Service)
 	newServer := Server{serviceMap: services}
-	newServer.tcpServer = gate.NewTcpServer(&newServer, addr)
-	newServer.sessions = make(map[uint16]*gate.Session)
+	newServer.tcpServer = network.NewTcpServer(&newServer, addr)
+	newServer.sessions = make(map[uint16]*network.Session)
 
 	return &newServer
 }
@@ -40,7 +40,7 @@ func (this *Server) Start() {
 	this.tcpServer.Start()
 }
 
-func (this *Server) Connect(fd uint16, session *gate.Session) {
+func (this *Server) Connect(fd uint16, session *network.Session) {
 	log.Debug("rpc server new connection", fd)
 	this.sessions[fd] = session
 }
@@ -112,7 +112,7 @@ func (this *Server) Message(fd uint16, sessionID uint16, body []byte) {
 	} else {
 		this.tcpServer.Write(s, sessionID, nil)
 	}
-	//retPkg := &gate.Data{Head: sessionID, Body: retBody}
+	//retPkg := &network.Data{Head: sessionID, Body: retBody}
 	//log.Debug("return", sessionID, args[0])
 	//this.tcpGate.Write(s, sessionID, retBody)
 	//outc <- retPkg

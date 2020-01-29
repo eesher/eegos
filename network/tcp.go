@@ -1,10 +1,11 @@
-package gate
+package network
 
 import (
-	"eegos/log"
-	"eegos/util"
+	"github.com/eesher/eegos/log"
+	"github.com/eesher/eegos/util"
 
 	"net"
+	"runtime/debug"
 	"time"
 )
 
@@ -18,7 +19,6 @@ type Handler interface {
 type TcpServer struct {
 	TcpConn
 	addr *net.TCPAddr
-	//lis *net.TCPListener
 }
 
 func NewTcpServer(handle Handler, addr string) *TcpServer {
@@ -33,21 +33,16 @@ func NewTcpServer(handle Handler, addr string) *TcpServer {
 	return newServer
 }
 
-/*
-func (this *TcpServer) Open(addr string) {
-}
-*/
-
 func (this *TcpServer) Start() {
 	lis, err := net.ListenTCP("tcp", this.addr)
 
-	log.Info("gateserver.Open: listening")
+	log.Info("gateserver.Open: listening", this.addr)
 	if err != nil {
 		log.Error("gateserver.Open: net.ListenTCP: ", err)
 		return
 	}
 
-	go func(l *net.TCPListener) {
+	func(l *net.TCPListener) {
 		defer log.Debug("listen stop")
 		for {
 			conn, err := l.Accept()
@@ -64,6 +59,14 @@ func (this *TcpServer) Start() {
 
 func (this *TcpServer) handleNewConn(conn net.Conn) {
 	s := this.NewSession(conn)
+
+	defer func() {
+		if err := recover(); err != nil {
+			log.Error(err, string(debug.Stack()))
+			s.Close()
+		}
+	}()
+
 	this.handle.Connect(s.fd, s)
 	go this.processInData(s)
 }
@@ -73,18 +76,15 @@ func (this *TcpServer) processInData(s *Session) {
 	for this.isOpen {
 		select {
 		case data, ok := <-s.inData:
-			//log.Debug("server in data", data.dType, data.head, ok)
 			if !ok {
 				continue
 			}
 			switch data.dType {
 			case HEARTBEAT:
 				go s.doWrite(data.head, HEARTBEAT_RET, []byte{})
-				//go s.Write(data.Head, HEARTBEAT_RET, []byte{})
 				go this.handle.Heartbeat(s.fd, data.head)
 			case DATA:
 				go s.msgHandle(s.fd, data.head, data.body)
-				//go this.handle.Message(s.fd, data.head, data.body)
 			}
 		case <-s.cClose:
 			this.Close(s)
@@ -130,7 +130,6 @@ func (this *TcpClient) GetSessionID() uint16 {
 
 func (this *TcpClient) processInData() {
 	defer log.Debug("processInData stop")
-	//defer this.Close(s.fd)
 	s := this.session
 	for this.isOpen {
 		select {
@@ -143,7 +142,6 @@ func (this *TcpClient) processInData() {
 				go this.handleHeartbeatRet(s.fd, data.head)
 			case DATA:
 				go s.msgHandle(s.fd, data.head, data.body)
-				//go this.handle.Message(s.fd, data.head, data.body)
 			}
 			go this.ticker.Reset(5 * time.Second)
 		case <-s.cClose:
@@ -162,7 +160,6 @@ func (this *TcpClient) heartbeat() {
 		sessionID := this.msgCounter.GetNum()
 
 		go s.doWrite(sessionID, HEARTBEAT, []byte{})
-		//go s.Write(sessionID, HEARTBEAT, []byte{})
 
 		select {
 		case sid := <-this.cHeartbeat:
@@ -184,7 +181,6 @@ func (this *TcpClient) WriteData(s *Session, buff []byte) uint16 {
 	sessionID := this.msgCounter.GetNum()
 	s.doWrite(sessionID, DATA, buff)
 	return sessionID
-	//pack := &Data{Head: sessionID, dType: DATA, Body: buff}
 }
 
 func (this *TcpClient) Close() {
@@ -205,40 +201,14 @@ func (this *TcpConn) NewSession(conn net.Conn) *Session {
 	session := CreateSession(conn, this.handle.Message)
 	session.Start()
 
-	//go this.processOutData(session)
 	return session
 }
 
 func (this *TcpConn) Close(s *Session) {
-	//this.isOpen = false
 	log.Debug("session close")
 	this.handle.Close(s.fd)
-	//this.Close(s.fd)
 	s.Release()
 }
-
-/*
-func (this *TcpConn) processOutData(s *Session) {
-	defer log.Debug("processOutData close")
-	for this.isOpen {
-		select {
-		case data, ok := <-s.outData:
-			if !ok {
-				continue
-			}
-			if data.dType == PKG_TYPE {
-				data.dType = DATA
-			}
-			log.Debug("out data", data.Head)
-			go s.Write(data.Head, data.dType, data.Body)
-
-		case <-s.cClose:
-			this.Close(s)
-			return
-		}
-	}
-}
-*/
 
 func (this *TcpConn) Write(s *Session, sID uint16, buff []byte) {
 	s.doWrite(sID, DATA, buff)
