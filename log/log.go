@@ -26,11 +26,11 @@ const (
 )
 
 const (
-	NOLOG = 0
-	DEBUG = 1
-	INFO  = 2
-	WARN  = 3
-	ERROR = 4
+	DEBUG = iota
+	INFO
+	WARN
+	ERROR
+	NOLOG
 )
 
 var (

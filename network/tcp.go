@@ -43,7 +43,7 @@ func (this *TcpServer) Start() {
 	}
 
 	func(l *net.TCPListener) {
-		defer log.Debug("listen stop")
+		//defer log.Debug("listen stop")
 		for {
 			conn, err := l.Accept()
 			if err != nil {
@@ -72,7 +72,7 @@ func (this *TcpServer) handleNewConn(conn net.Conn) {
 }
 
 func (this *TcpServer) processInData(s *Session) {
-	defer log.Debug("processInData stop")
+	//defer log.Debug("processInData stop")
 	for this.isOpen {
 		select {
 		case data, ok := <-s.inData:
@@ -129,7 +129,7 @@ func (this *TcpClient) GetSessionID() uint16 {
 }
 
 func (this *TcpClient) processInData() {
-	defer log.Debug("processInData stop")
+	//defer log.Debug("processInData stop")
 	s := this.session
 	for this.isOpen {
 		select {
@@ -152,21 +152,21 @@ func (this *TcpClient) processInData() {
 }
 
 func (this *TcpClient) heartbeat() {
-	defer log.Debug("heartbeat stop")
+	//defer log.Debug("heartbeat stop")
 	s := this.session
 	for this.isOpen {
 		<-this.ticker.C
-		log.Debug("heartbeat ticker")
+		//log.Debug("heartbeat ticker")
 		sessionID := this.msgCounter.GetNum()
 
 		go s.doWrite(sessionID, HEARTBEAT, []byte{})
 
 		select {
-		case sid := <-this.cHeartbeat:
-			log.Debug("heartbeat ret:", sid)
+		case <-this.cHeartbeat:
+			//log.Debug("heartbeat ret:", sid)
 
 		case <-time.After(3 * time.Second):
-			log.Debug("heartbeat Timed out", sessionID)
+			log.Warn("heartbeat Timed out", sessionID)
 			this.ticker.Reset(5 * time.Second)
 		}
 
@@ -184,7 +184,7 @@ func (this *TcpClient) WriteData(s *Session, buff []byte) uint16 {
 }
 
 func (this *TcpClient) Close() {
-	log.Debug("TcpClient Close()")
+	//log.Debug("TcpClient Close()")
 	this.isOpen = false
 	this.ticker.Stop()
 	close(this.cHeartbeat)
@@ -205,7 +205,7 @@ func (this *TcpConn) NewSession(conn net.Conn) *Session {
 }
 
 func (this *TcpConn) Close(s *Session) {
-	log.Debug("session close")
+	//log.Debug("session close")
 	this.handle.Close(s.fd)
 	s.Release()
 }

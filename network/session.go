@@ -47,7 +47,7 @@ func (this *Session) Close() {
 }
 
 func (this *Session) Release() {
-	log.Debug("release session")
+	//log.Debug("release session")
 	close(this.inData)
 	close(this.outData)
 	close(this.cClose)
@@ -60,16 +60,27 @@ func (this *Session) Forward(msgHandle func(uint16, uint16, []byte)) {
 
 func (this *Session) pack(head uint16, dType uint8, body []byte) (pkg []byte) {
 	length := len(body)
+	if length > 65535 {
+		log.Warn("package too big, limit 65535!!!!", length)
+		length = 0
+		body = []byte{}
+	}
 	pkg = make([]byte, 0, length+5)
 	pkg = append(pkg, uint8(length), uint8(length>>8), dType, uint8(head), uint8(head>>8))
 	pkg = append(pkg, body...)
 	return pkg
 }
 
-func (this *Session) Reader() error {
+func (this *Session) Reader() (err error) {
+	defer func() {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			err = nil
+		}
+	}()
+
 	var b [5]byte
-	if _, err := io.ReadFull(this.conn, b[:]); err != nil {
-		return err
+	if _, err = io.ReadFull(this.conn, b[:]); err != nil {
+		return
 	}
 	pkgLen := uint16(b[0]) + uint16(b[1])<<8
 	pkg := &Data{}
@@ -77,8 +88,8 @@ func (this *Session) Reader() error {
 	pkg.head = uint16(b[3]) + uint16(b[4])<<8
 	if pkgLen > 0 {
 		pkg.body = make([]byte, pkgLen)
-		if _, err := io.ReadFull(this.conn, pkg.body); err != nil {
-			return err
+		if _, err = io.ReadFull(this.conn, pkg.body); err != nil {
+			return
 		}
 	}
 	this.inData <- pkg
@@ -86,9 +97,9 @@ func (this *Session) Reader() error {
 }
 
 func (this *Session) handleRead() {
-	log.Debug("handleRead start")
+	//log.Debug("handleRead start")
 	defer func() {
-		log.Debug("connection close")
+		//log.Debug("connection close")
 		this.conn.Close()
 		this.cClose <- true
 		if err := recover(); err != nil {
@@ -102,19 +113,17 @@ func (this *Session) handleRead() {
 		}
 
 		if err := this.Reader(); err != nil {
-			if err != io.EOF {
-				log.Error(err)
-			}
+			log.Error(err)
 			break
 		}
 	}
 
-	log.Debug("handleRead stop")
+	//log.Debug("handleRead stop")
 }
 
 func (this *Session) handleWrite() {
-	log.Debug("handleWrite start")
-	defer log.Debug("handleWrite stop")
+	//log.Debug("handleWrite start")
+	//defer log.Debug("handleWrite stop")
 	for {
 		if this.state != WORKING {
 			break
