@@ -72,12 +72,6 @@ func (this *Session) pack(head uint16, dType uint8, body []byte) (pkg []byte) {
 }
 
 func (this *Session) Reader() (err error) {
-	defer func() {
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
-			err = nil
-		}
-	}()
-
 	var b [5]byte
 	if _, err = io.ReadFull(this.conn, b[:]); err != nil {
 		return
@@ -113,7 +107,9 @@ func (this *Session) handleRead() {
 		}
 
 		if err := this.Reader(); err != nil {
-			log.Error(err)
+			if err != io.EOF && err != io.ErrUnexpectedEOF {
+				log.Error(err)
+			}
 			break
 		}
 	}
@@ -136,11 +132,12 @@ func (this *Session) handleWrite() {
 			}
 		}
 	}
+	this.conn.Close()
 }
 
 func (this *Session) doWrite(head uint16, dType uint8, data []byte) {
 	if this.state != WORKING {
-		log.Error("session not working state=", this.state, "pkg not send", head)
+		log.Error("session not working state=", this.state, "pkg not send", head, dType)
 		return
 	}
 	if data == nil {

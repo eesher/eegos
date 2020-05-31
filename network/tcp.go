@@ -81,6 +81,9 @@ func (this *TcpServer) processInData(s *Session) {
 			}
 			switch data.dType {
 			case HEARTBEAT:
+				if s.state != WORKING {
+					break
+				}
 				go s.doWrite(data.head, HEARTBEAT_RET, []byte{})
 				go this.handle.Heartbeat(s.fd, data.head)
 			case DATA:
