@@ -19,3 +19,16 @@ type Data struct {
 	head  uint16
 	body  []byte
 }
+
+type Handler interface {
+	Connect(uint16, Session)
+	Message(uint16, uint16, []byte)
+	Heartbeat(uint16, uint16)
+	Close(uint16)
+}
+
+type Session interface {
+	Forward(func(uint16, uint16, []byte))
+	Close()
+	doWrite(uint16, uint8, []byte)
+}

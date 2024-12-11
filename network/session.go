@@ -13,7 +13,7 @@ var writeLock = &sync.Mutex{}
 
 var sessionCounter = util.Counter{Num: 0}
 
-type Session struct {
+type tcpSession struct {
 	fd        uint16
 	conn      io.ReadWriteCloser
 	inData    chan *Data
@@ -23,8 +23,8 @@ type Session struct {
 	msgHandle func(uint16, uint16, []byte)
 }
 
-func CreateSession(conn io.ReadWriteCloser, msgHandle func(uint16, uint16, []byte)) *Session {
-	session := new(Session)
+func CreateTcpSession(conn io.ReadWriteCloser, msgHandle func(uint16, uint16, []byte)) *tcpSession {
+	session := new(tcpSession)
 	session.fd = sessionCounter.GetNum()
 	session.conn = conn
 	session.inData = make(chan *Data, 1)
@@ -36,17 +36,17 @@ func CreateSession(conn io.ReadWriteCloser, msgHandle func(uint16, uint16, []byt
 	return session
 }
 
-func (this *Session) Start() {
+func (this *tcpSession) Start() {
 	this.state = WORKING
 	go this.handleRead()
 	go this.handleWrite()
 }
 
-func (this *Session) Close() {
+func (this *tcpSession) Close() {
 	this.state = CLOSING
 }
 
-func (this *Session) Release() {
+func (this *tcpSession) Release() {
 	//log.Debug("release session")
 	close(this.inData)
 	close(this.outData)
@@ -54,11 +54,11 @@ func (this *Session) Release() {
 	this.state = CLOSED
 }
 
-func (this *Session) Forward(msgHandle func(uint16, uint16, []byte)) {
+func (this *tcpSession) Forward(msgHandle func(uint16, uint16, []byte)) {
 	this.msgHandle = msgHandle
 }
 
-func (this *Session) pack(head uint16, dType uint8, body []byte) (pkg []byte) {
+func (this *tcpSession) pack(head uint16, dType uint8, body []byte) (pkg []byte) {
 	length := len(body)
 	if length > 65535 {
 		log.Warn("package too big, limit 65535!!!!", length)
@@ -71,7 +71,7 @@ func (this *Session) pack(head uint16, dType uint8, body []byte) (pkg []byte) {
 	return pkg
 }
 
-func (this *Session) Reader() (err error) {
+func (this *tcpSession) Reader() (err error) {
 	var b [5]byte
 	if _, err = io.ReadFull(this.conn, b[:]); err != nil {
 		return
@@ -90,7 +90,7 @@ func (this *Session) Reader() (err error) {
 	return nil
 }
 
-func (this *Session) handleRead() {
+func (this *tcpSession) handleRead() {
 	//log.Debug("handleRead start")
 	defer func() {
 		//log.Debug("connection close")
@@ -117,7 +117,7 @@ func (this *Session) handleRead() {
 	//log.Debug("handleRead stop")
 }
 
-func (this *Session) handleWrite() {
+func (this *tcpSession) handleWrite() {
 	//log.Debug("handleWrite start")
 	//defer log.Debug("handleWrite stop")
 	for {
@@ -135,7 +135,7 @@ func (this *Session) handleWrite() {
 	this.conn.Close()
 }
 
-func (this *Session) doWrite(head uint16, dType uint8, data []byte) {
+func (this *tcpSession) doWrite(head uint16, dType uint8, data []byte) {
 	if this.state != WORKING {
 		log.Error("session not working state=", this.state, "pkg not send", head, dType)
 		return

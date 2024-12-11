@@ -9,13 +9,6 @@ import (
 	"time"
 )
 
-type Handler interface {
-	Connect(uint16, *Session)
-	Message(uint16, uint16, []byte)
-	Heartbeat(uint16, uint16)
-	Close(uint16)
-}
-
 type TcpServer struct {
 	TcpConn
 	addr *net.TCPAddr
@@ -71,7 +64,7 @@ func (this *TcpServer) handleNewConn(conn net.Conn) {
 	go this.processInData(s)
 }
 
-func (this *TcpServer) processInData(s *Session) {
+func (this *TcpServer) processInData(s *tcpSession) {
 	//defer log.Debug("processInData stop")
 	for this.isOpen {
 		select {
@@ -101,7 +94,7 @@ type TcpClient struct {
 	msgCounter *util.Counter
 	cHeartbeat chan uint16
 	ticker     *time.Timer
-	session    *Session
+	session    *tcpSession
 }
 
 func NewTcpClient(handle Handler) *TcpClient {
@@ -180,7 +173,7 @@ func (this *TcpClient) handleHeartbeatRet(fd uint16, sessionID uint16) {
 	this.cHeartbeat <- sessionID
 }
 
-func (this *TcpClient) WriteData(s *Session, buff []byte) uint16 {
+func (this *TcpClient) WriteData(s Session, buff []byte) uint16 {
 	sessionID := this.msgCounter.GetNum()
 	s.doWrite(sessionID, DATA, buff)
 	return sessionID
@@ -199,20 +192,20 @@ type TcpConn struct {
 	handle Handler
 }
 
-func (this *TcpConn) NewSession(conn net.Conn) *Session {
+func (this *TcpConn) NewSession(conn net.Conn) *tcpSession {
 	log.Debug("new connection from ", conn.RemoteAddr())
-	session := CreateSession(conn, this.handle.Message)
+	session := CreateTcpSession(conn, this.handle.Message)
 	session.Start()
 
 	return session
 }
 
-func (this *TcpConn) Close(s *Session) {
+func (this *TcpConn) Close(s *tcpSession) {
 	//log.Debug("session close")
 	this.handle.Close(s.fd)
 	s.Release()
 }
 
-func (this *TcpConn) Write(s *Session, sID uint16, buff []byte) {
+func (this *TcpConn) Write(s Session, sID uint16, buff []byte) {
 	s.doWrite(sID, DATA, buff)
 }
